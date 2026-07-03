@@ -1,0 +1,1237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AER Gas Distribution Networks — Performance &amp; Decisions Dashboard</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f2f4f8; color: #1a1a2e; font-size: 14px; }
+
+    /* ---- HEADER ---- */
+    .header { background: #0d1b3e; color: white; padding: 22px 36px 18px; }
+    .header h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+    .header-meta { font-size: 12px; color: rgba(255,255,255,0.65); margin-top: 5px; line-height: 1.7; }
+    .network-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .pill {
+      display: inline-block; padding: 3px 9px; border-radius: 99px;
+      font-size: 11px; font-weight: 600; color: white; letter-spacing: 0.2px;
+    }
+
+    /* ---- TABS ---- */
+    .tab-bar { background: #0d1b3e; display: flex; padding: 0 36px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .tab-btn {
+      padding: 12px 20px; background: none; border: none; border-bottom: 3px solid transparent;
+      color: rgba(255,255,255,0.6); cursor: pointer; font-size: 13px; font-weight: 500;
+      transition: all 0.15s; margin-bottom: -1px;
+    }
+    .tab-btn:hover { color: rgba(255,255,255,0.9); }
+    .tab-btn.active { color: #7ec8ff; border-bottom-color: #7ec8ff; }
+    .tab-divider { color: rgba(255,255,255,0.35); font-size: 11px; font-weight: 600; letter-spacing: 0.05em; padding: 0 8px; display: flex; align-items: center; white-space: nowrap; text-transform: uppercase; border-left: 1px solid rgba(255,255,255,0.2); margin-left: 6px; padding-left: 14px; }
+
+    /* ---- CONTENT ---- */
+    .content { max-width: 1440px; margin: 0 auto; padding: 28px 36px 48px; }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    .intro-text { font-size: 13px; color: #555; line-height: 1.65; margin-bottom: 16px; max-width: 900px; }
+
+    /* ---- DATA NOTE ---- */
+    .data-note {
+      background: #fff8e1; border-left: 4px solid #f9a825; border-radius: 4px;
+      padding: 10px 14px; font-size: 12px; color: #5a3e00; margin-bottom: 20px; line-height: 1.6;
+    }
+    .data-note strong { font-weight: 700; }
+
+    /* ---- CHARTS ---- */
+    .chart-grid { display: grid; gap: 18px; margin-bottom: 24px; }
+    .chart-grid-2 { grid-template-columns: 1fr 1fr; }
+    .chart-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+    .chart-card {
+      background: white; border-radius: 10px; padding: 20px;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+    }
+    .chart-card.span-2 { grid-column: span 2; }
+    .chart-card.span-3 { grid-column: span 3; }
+    .chart-title { font-size: 13px; font-weight: 700; color: #0d1b3e; margin-bottom: 2px; }
+    .chart-sub { font-size: 11px; color: #888; margin-bottom: 14px; line-height: 1.4; }
+    .chart-wrap { position: relative; }
+
+    /* ---- TABLES ---- */
+    .section-head { font-size: 15px; font-weight: 700; color: #0d1b3e; margin: 28px 0 12px; }
+    .section-desc { font-size: 12px; color: #666; margin-bottom: 14px; line-height: 1.55; }
+    .table-scroll { overflow-x: auto; margin-bottom: 28px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 6px rgba(0,0,0,0.07); }
+    thead tr { background: #0d1b3e; }
+    th { color: rgba(255,255,255,0.9); padding: 10px 13px; text-align: right; font-weight: 500; white-space: nowrap; }
+    th:first-child { text-align: left; }
+    td { padding: 9px 13px; border-bottom: 1px solid #f0f0f0; text-align: right; white-space: nowrap; }
+    td:first-child { text-align: left; font-weight: 500; }
+    tr:last-child td { border-bottom: none; }
+    tr.prior-row td { background: #fafafa; }
+    tr.current-row td { background: white; }
+    .network-badge {
+      display: inline-block; padding: 2px 7px; border-radius: 4px;
+      font-size: 11px; font-weight: 700; color: white; margin-right: 4px;
+    }
+    .na-cell { color: #bbb; font-style: italic; font-size: 11px; }
+    .neg { color: #c62828; }
+    .total-cell { font-weight: 700; }
+
+    /* ---- COMMENTARY ---- */
+    .commentary-box { background: white; border-radius: 10px; box-shadow: 0 1px 6px rgba(0,0,0,0.07); padding: 20px 24px; margin-bottom: 28px; }
+    .commentary-box h3 { font-size: 14px; font-weight: 700; color: #0d1b3e; margin-bottom: 14px; }
+    .c-item { padding: 11px 0; border-bottom: 1px solid #f2f2f2; font-size: 12.5px; line-height: 1.65; }
+    .c-item:last-child { border-bottom: none; padding-bottom: 0; }
+    .c-network { font-weight: 700; color: #0d1b3e; }
+    .page-ref { display: inline-block; background: #eef2fa; color: #3a5bab; font-size: 10.5px; padding: 1px 6px; border-radius: 3px; margin-left: 4px; font-weight: 600; }
+
+    /* ---- CATEGORY TABLE ---- */
+    .cat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 28px; }
+    .cat-card { background: white; border-radius: 10px; box-shadow: 0 1px 6px rgba(0,0,0,0.07); padding: 18px; }
+    .cat-card h4 { font-size: 13px; font-weight: 700; color: #0d1b3e; margin-bottom: 12px; }
+    .cat-card table { box-shadow: none; border-radius: 0; }
+    .cat-card th { font-size: 11px; padding: 7px 10px; }
+    .cat-card td { font-size: 12px; padding: 7px 10px; }
+
+    @media (max-width: 960px) {
+      .chart-grid-2, .chart-grid-3, .cat-grid { grid-template-columns: 1fr; }
+      .chart-card.span-2, .chart-card.span-3 { grid-column: span 1; }
+      .content { padding: 18px; }
+      .tab-bar { padding: 0 18px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>AER Gas Distribution Networks — Performance &amp; Decisions Dashboard</h1>
+  <div class="header-meta">
+    Network performance 2011–2025 &nbsp;·&nbsp; GAAR final decisions by access arrangement period &nbsp;·&nbsp; Source: AER<br>
+    Performance figures in real A$M (June 2025) &nbsp;·&nbsp; Decision figures in nominal A$M (revenue/depreciation) or real A$M (capex/opex)
+  </div>
+  <div class="network-pills">
+    <span class="pill" style="background:#1565C0">JGN (NSW)</span>
+    <span class="pill" style="background:#E65100">Evoenergy (ACT)</span>
+    <span class="pill" style="background:#2E7D32">AGN SA</span>
+    <span class="pill" style="background:#039BE5">AusNet (Vic)</span>
+    <span class="pill" style="background:#6A1B9A">Multinet (Vic)</span>
+    <span class="pill" style="background:#AD1457">AGN Vic</span>
+  </div>
+</div>
+
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('performance', this)">Network Performance</button>
+  <span class="tab-divider">GAAR Decisions</span>
+  <button class="tab-btn" onclick="switchTab('revenue', this)">Total Revenue</button>
+  <button class="tab-btn" onclick="switchTab('capex', this)">Capital Expenditure</button>
+  <button class="tab-btn" onclick="switchTab('opex', this)">Operating Expenditure</button>
+  <button class="tab-btn" onclick="switchTab('depreciation', this)">Depreciation</button>
+</div>
+
+<div class="content">
+
+  <!-- ===== TAB 1: REVENUE ===== -->
+  <div id="tab-revenue" class="tab-pane">
+    <p class="intro-text">
+      Total smoothed allowed revenue (nominal A$M) determines what each network recovers from customers over the access arrangement period.
+      Revenue is built from six components: <strong>return on capital</strong> (WACC × RAB), <strong>regulatory depreciation</strong> (return of capital),
+      <strong>operating expenditure</strong>, <strong>corporate income tax</strong>, and net <strong>revenue adjustments</strong> (carryovers, CESS, etc.).
+    </p>
+    <div class="data-note" style="background:#e8f5e9; border-color:#388e3c; color:#1b5e20;">
+      <strong>✓ All 12 decisions loaded.</strong> Data sourced from AER Final Decision Overview PDFs for all six networks across two access arrangement periods each.
+      Victorian 2018–22 period covers July 2018 to June 2022 (later extended to December 2022 for some networks).
+    </div>
+
+    <div class="chart-grid chart-grid-2">
+      <div class="chart-card span-2">
+        <div class="chart-title">Total Smoothed Allowed Revenue</div>
+        <div class="chart-sub">Nominal A$M per 5-year access arrangement period · Lighter bars = prior period; solid = current period</div>
+        <div class="chart-wrap" style="height:320px"><canvas id="revTotalChart"></canvas></div>
+      </div>
+      <div class="chart-card span-2">
+        <div class="chart-title">Building Block Composition</div>
+        <div class="chart-sub">Nominal A$M · Stacked by building block component · Revenue adjustments shown as positive (teal) or negative (red) on top of base stack · Components may not sum to smoothed total due to smoothing</div>
+        <div class="chart-wrap" style="height:340px"><canvas id="revBBChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="section-head">Building Block Detail</div>
+    <p class="section-desc">All revenue figures in nominal A$M (smoothed total; building block components on pre-smoothing basis). Negative revenue adjustments shown in parentheses.</p>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Network / Period</th>
+            <th>Return on Capital</th>
+            <th>Reg. Depreciation</th>
+            <th>Operating Expenditure</th>
+            <th>Corp. Income Tax</th>
+            <th>Revenue Adjustments</th>
+            <th>Total Revenue (smoothed)</th>
+          </tr>
+        </thead>
+        <tbody id="revTbody"></tbody>
+      </table>
+    </div>
+
+    <div class="section-head">Key Commentary</div>
+    <div class="commentary-box">
+      <div class="c-item">
+        <span class="c-network">JGN 2020–25 → 2025–30:</span>
+        Total revenue increased by <strong>$930.8M (+42.8%)</strong> to $3,106.7M. Driven by a significantly higher WACC (~6.4% vs ~4.3%) lifting return on capital by $481.7M (+63.8%); $115M approved accelerated depreciation increasing the regulatory depreciation block by $74.2M (+16.7%); and opex up $71.9M (+6.1%). Revenue adjustments shifted from –$184.5M (net under-recovery carryover) to +$40.0M.
+        <span class="page-ref">Overview pp. 4–8</span>
+      </div>
+      <div class="c-item">
+        <span class="c-network">Evoenergy 2021–26 → 2026–31:</span>
+        Total revenue increased by <strong>$95.4M (+30.1%)</strong> to $412.8M. Return on capital rose $39.4M (+46.6%) on higher WACC. Regulatory depreciation grew $36.6M (+73.1%) reflecting the $30M in accelerated depreciation approved through shortening HP/MP pipeline asset lives to align with the ACT Government's 2045 gas network decommissioning target. An additional $35M of accelerated depreciation proposed by Evoenergy beyond reduced asset lives was not accepted.
+        <span class="page-ref">Overview pp. 3–7</span>
+      </div>
+      <div class="c-item">
+        <span class="c-network">AGN SA 2021–26 → 2026–31:</span>
+        Total revenue increased by <strong>$248.1M (+22.1%)</strong> to $1,370.3M. Return on capital surged $292.1M (+70.6%) as the capital base grew — boosted by the $250M accelerated depreciation in 2021–26 which elevated the opening RAB and by higher forecast capex. Regulatory depreciation fell sharply from $322.9M to $166.1M as the large one-off mains replacement accelerated depreciation is replaced by a small $29M (reduced asset lives only). The opex building block grew by $121.8M (+31.2%).
+        <span class="page-ref">Overview pp. 4–9</span>
+      </div>
+      <div class="c-item">
+        <span class="c-network">AusNet 2018–22 → 2023–28:</span>
+        Total revenue increased by <strong>$230.2M (+22.1%)</strong> from $1,040.1M to $1,270.3M. Return on capital rose $62.1M (+12.3%) as the capital base grew from ongoing capex; it is now 44.7% of total. Regulatory depreciation grew $96.3M (+52.0%), driven by the $105M approved accelerated depreciation in 2023–28 (nil in 2018–22). No accelerated depreciation was approved in the 2018–22 period. Capex fell from $477.5M to $427.6M as declining demand reduced growth capex. Opex rose from $272.3M to $349.8M ($+77.5M, +28.5%) partly due to addition of abolishment costs ($14.5M) not present in 2018–22.
+        <span class="page-ref">Overview pp. 5–9</span>
+      </div>
+      <div class="c-item">
+        <span class="c-network">Multinet 2018–22 → 2023–28:</span>
+        Total revenue increased by <strong>$119.4M (+11.5%)</strong> to $1,154.9M. Return on capital rose $96.7M (+26.2%) as capital base grew from ongoing mains replacement and $53M approved accelerated depreciation. Opex building block grew $82.6M (+19.9%) in nominal terms, partly reflecting growing connection abolishment costs from customer departures.
+        <span class="page-ref">Overview pp. 5–10</span>
+      </div>
+      <div class="c-item">
+        <span class="c-network">AGN Vic 2018–22 → 2023–28:</span>
+        Total revenue increased by <strong>$168.6M (+14.1%)</strong> from $1,193.5M to $1,362.1M. Return on capital grew $89.1M (+17.8%) as the capital base increased from the large ongoing capex program and $175M in approved accelerated depreciation. Regulatory depreciation grew $50.8M (+21.5%) reflecting the accelerated depreciation approved in 2023–28 (nil in 2018–22, where mains replacement was handled as standard regulatory depreciation). Capex fell significantly from $549.6M to $433.5M as the mains replacement program approaches completion. Revenue adjustments of –$93.0M in 2023–28 are the largest negative adjustment across all 12 decisions reviewed, reflecting significant over-recovery carryover from 2018–22.
+        <span class="page-ref">Overview pp. 4–8</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== TAB 2: CAPEX ===== -->
+  <div id="tab-capex" class="tab-pane">
+    <p class="intro-text">
+      Total approved net capital expenditure forecast (net of customer contributions and disposals) for each access arrangement period, stated in real constant dollars for the nominated base year. Capex directly affects the capital base and thus the return on capital and depreciation building blocks in the following period.
+    </p>
+    <div class="data-note">
+      <strong>Comparability note:</strong> Figures are in <em>real constant dollars</em> with price base year varying by decision (see table). Different inflation environments between base years affect direct cross-network comparisons. Detailed capex category breakdowns are in the regulatory attachments; the overview documents provide totals and high-level commentary on key drivers.
+    </div>
+
+    <div class="chart-grid chart-grid-2">
+      <div class="chart-card span-2">
+        <div class="chart-title">Total Approved Net Capital Expenditure</div>
+        <div class="chart-sub">Real A$M (price base year varies — see table) · Lighter bars = prior period; solid = current period</div>
+        <div class="chart-wrap" style="height:310px"><canvas id="capexChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="section-head">Capex Summary Table</div>
+    <p class="section-desc">Each network shown once. Figures are real A$M (price base in parentheses). Direct cross-period comparisons should account for different price base years.</p>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th style="text-align:left">Network</th>
+            <th>Previous Decision</th>
+            <th>Current Decision</th>
+            <th style="text-align:left;min-width:240px">Key Drivers — Current Period</th>
+          </tr>
+        </thead>
+        <tbody id="capexTbody"></tbody>
+      </table>
+    </div>
+
+    <div class="section-head">Capex Category Breakdowns (where available from Overviews)</div>
+    <div class="cat-grid">
+      <div class="cat-card">
+        <h4>AGN SA 2026–31 — Capex by Category ($2025–26, $M)</h4>
+        <table>
+          <thead><tr><th style="text-align:left">Category</th><th>AER Final ($M)</th><th>% of Net</th></tr></thead>
+          <tbody>
+            <tr><td>Connections (net of contributions)</td><td>13.9</td><td>4.2%</td></tr>
+            <tr><td>ICT</td><td>68.7</td><td>20.7%</td></tr>
+            <tr><td>Other Network</td><td>92.2</td><td>27.8%</td></tr>
+            <tr><td>Mains Replacement</td><td>85.5</td><td>25.7%</td></tr>
+            <tr><td>Meter Replacement</td><td>36.0</td><td>10.8%</td></tr>
+            <tr><td>Overheads</td><td>21.8</td><td>6.6%</td></tr>
+            <tr><td>Other Non-Network</td><td>7.7</td><td>2.3%</td></tr>
+            <tr><td>Mains Augmentation</td><td>6.4</td><td>1.9%</td></tr>
+            <tr><td>Telemetry</td><td>3.8</td><td>1.1%</td></tr>
+            <tr><td><strong>Net Total</strong></td><td><strong>332.3</strong></td><td><strong>100%</strong></td></tr>
+          </tbody>
+        </table>
+        <p style="font-size:11px;color:#888;margin-top:8px">Source: AER Final Decision Overview, p. 21</p>
+      </div>
+      <div class="cat-card">
+        <h4>Evoenergy 2026–31 — Capex by Category ($2025–26, $M)</h4>
+        <table>
+          <thead><tr><th style="text-align:left">Category</th><th>AER Final ($M)</th><th>% of Net</th></tr></thead>
+          <tbody>
+            <tr><td>Connections (net of contributions)</td><td>0.3</td><td>1.0%</td></tr>
+            <tr><td>IT</td><td>0.1</td><td>0.3%</td></tr>
+            <tr><td>Other Network</td><td>1.5</td><td>4.8%</td></tr>
+            <tr><td>Meter Replacement</td><td>15.2</td><td>48.4%</td></tr>
+            <tr><td>Network Overheads</td><td>12.6</td><td>40.1%</td></tr>
+            <tr><td>Corporate Overheads</td><td>3.0</td><td>9.6%</td></tr>
+            <tr><td><strong>Net Total</strong></td><td><strong>31.4</strong></td><td><strong>100%</strong></td></tr>
+          </tbody>
+        </table>
+        <p style="font-size:11px;color:#888;margin-top:8px">Source: AER Final Decision Overview, p. 22</p>
+      </div>
+    </div>
+
+    <div class="section-head">Key Commentary — Current Period</div>
+    <div class="commentary-box">
+      <div class="c-item">
+        <span class="c-network">JGN 2025–30 ($717.4M, $2024–25):</span>
+        AER approved $120.7M below JGN's revised proposal. Key reductions: renewable gas connections excluded (–$78.9M; AER found insufficient justification); meter replacement cut by $49.7M. Customer connections capex increased by $35.0M net of contributions, based on the AER's higher demand forecast than JGN's.
+        <span class="page-ref">Overview pp. 6–7, 18–19</span>
+      </div>
+      <div class="c-item">
+        <span class="c-network">Evoenergy 2026–31 ($31.4M, $2025–26):</span>
+        Capex is 49.2% below the AER-approved 2021–26 amount, reflecting sharply declining ACT demand. Meter replacement dominates at $15.2M (48% of total) as the network ages; connections capex has fallen to just $0.3M net. Network overheads ($12.6M, 40%) are substantially fixed costs that do not scale with demand reduction.
+        <span class="page-ref">Overview pp. 21–23</span>
+      </div>
+      <div class="c-item">
+        <span class="c-network">AGN SA 2026–31 ($332.3M, $2025–26):</span>
+        AER approved $4.9M (–1.5%) below AGN's revised proposal, cutting ICT by $4.3M and meter replacement by $2.5M. The major SA mains replacement program is substantially complete; mains replacement capex falls to $85.5M (25.7% of total) vs a larger program in 2021–26. New connections at $13.9M net reflects the decline in new SA gas customers.
+        <span class="page-ref">Overview pp. 20–22</span>
+      </div>
+      <div class="c-item">
+        <span class="c-network">AusNet 2023–28 ($427.6M, $2022–23):</span>
+        Accepted as per revised proposal; 14% ($71.7M) below AusNet's actual capex in 2018–22. New connections ($187M) and augmentation ($19.8M) are lower due to declining demand. Safety-driven capex — mains replacement completion, IT and meter replacement — continues at regulated standards irrespective of demand.
+        <span class="page-ref">Overview pp. 24–26</span>
+      </div>
+      <div class="c-item">
+        <span class="c-network">Multinet 2023–28 ($668.7M, $2022–23):</span>
+        Accepted as per revised proposal; 51% ($225.4M) above Multinet's actual capex in 2018–22. Dominated by the mains replacement program at $408M ($2023–24 real, 61% of total capex) to meet Australian Standards and Energy Safe Victoria gas safety case obligations. Multinet's dense urban Melbourne network has aging metal mains requiring systematic replacement.
+        <span class="page-ref">Overview pp. 24–26</span>
+      </div>
+      <div class="c-item">
+        <span class="c-network">AGN Vic 2023–28 ($433.5M, $2022–23):</span>
+        Accepted as per revised proposal; 31% ($196.8M) below AGN Vic's actual capex in 2018–22. New connections ($166.1M) and augmentation ($57.8M) are lower reflecting demand decline. Ongoing mains replacement completion, IT and meter replacement are safety-driven and broadly demand-independent in the near term.
+        <span class="page-ref">Overview pp. 24–26</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== TAB 3: OPEX ===== -->
+  <div id="tab-opex" class="tab-pane">
+    <p class="intro-text">
+      Total approved operating expenditure forecast for each access arrangement period, in real constant dollars for the nominated base year. Opex covers operating, maintenance and non-capital expenses for providing pipeline services (field operations, administration, IT, customer service) plus debt raising costs.
+      <strong>Note: The opex figures here are the AER-approved forecast in real dollars (the basis for the opex regulatory test), which differ from the nominal opex building block amounts shown in the Revenue tab.</strong>
+    </p>
+    <div class="data-note">
+      <strong>Comparability note:</strong> Real dollar price bases vary by decision — direct cross-network comparisons should account for inflation differences. Detailed opex category breakdowns (by maintenance vs non-maintenance, field operations vs administration, etc.) are in the full regulatory attachments and not consistently published in the overview documents.
+    </div>
+
+    <div class="chart-grid chart-grid-2">
+      <div class="chart-card span-2">
+        <div class="chart-title">Total Approved Operating Expenditure</div>
+        <div class="chart-sub">Real A$M (price base year varies — see table) · Lighter bars = prior period; solid = current period</div>
+        <div class="chart-wrap" style="height:310px"><canvas id="opexChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="section-head">Opex Summary Table</div>
+    <p class="section-desc">Each network shown once. Figures are real A$M (price base in parentheses). Direct cross-period comparisons should account for different price base years.</p>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th style="text-align:left">Network</th>
+            <th>Previous Decision</th>
+            <th>Current Decision</th>
+            <th>vs Revised Proposal</th>
+            <th style="text-align:left;min-width:220px">Key Commentary — Current Period</th>
+          </tr>
+        </thead>
+        <tbody id="opexTbody"></tbody>
+      </table>
+    </div>
+
+    <div class="section-head">Key Commentary — Current Period</div>
+    <div class="commentary-box">
+      <div class="c-item">
+        <span class="c-network">JGN 2025–30 ($1,144.9M, $2024–25):</span>
+        AER approved $3.6M (0.3%) below JGN's revised proposal. Includes $12.7M for abolishment costs — approved for the first time as a material cost category. In real terms on a same price-basis, 2025–30 opex is $164.8M (12.6%) lower than the 2020–25 allowance, reflecting efficiency gains and declining throughput.
+        <span class="page-ref">Overview pp. 9–10, 25–27</span>
+      </div>
+      <div class="c-item">
+        <span class="c-network">Evoenergy 2026–31 ($171.0M, $2025–26):</span>
+        AER approved $4.4M (–2.5%) below Evoenergy's revised proposal of $175.4M. On a real same-base comparison, 2026–31 opex is 18.4% lower than the 2021–26 allowed amount, reflecting the network's declining demand and customer numbers.
+        <span class="page-ref">Overview pp. 26–28</span>
+      </div>
+      <div class="c-item">
+        <span class="c-network">AGN SA 2026–31 ($456.7M, $2025–26):</span>
+        AER approved <strong>$22.8M above</strong> AGN's revised proposal — the AER added forecast customer connection abolishment costs as a new cost category. The underlying opex ($433.9M) was accepted as satisfying the NGR criteria. Abolishment costs reflect a trend of customers leaving the SA gas network.
+        <span class="page-ref">Overview pp. 21–25</span>
+      </div>
+      <div class="c-item">
+        <span class="c-network">AusNet 2023–28 ($349.8M, $2022–23):</span>
+        AER approved <strong>$14.5M above</strong> AusNet's revised proposal of $335.3M, adding forecast small customer connection abolishment costs. The underlying opex was accepted as satisfying the criteria. Abolishment costs are a new cost driver for AusNet as Victorian customers disconnect from the gas network.
+        <span class="page-ref">Overview pp. 26–28</span>
+      </div>
+      <div class="c-item">
+        <span class="c-network">Multinet 2023–28 ($432.8M, $2022–23):</span>
+        AER approved <strong>$33.5M above</strong> MGN's revised proposal, adding forecast customer connection abolishment costs — the largest AER-initiated addition of any network in this round. Underlying accepted opex is $399.4M. The large abolishment cost addition reflects the high density and age of Multinet's customer base in Melbourne inner suburbs.
+        <span class="page-ref">Overview pp. 25–27</span>
+      </div>
+      <div class="c-item">
+        <span class="c-network">AGN Vic 2023–28 ($506.5M, $2022–23):</span>
+        AER approved <strong>$29.1M above</strong> AGN's revised proposal, adding abolishment costs. At 42.8% of total allowed revenue, opex is the largest building block for AGN Vic — reflecting the large Victorian and Albury customer base. Underlying accepted opex is $477.5M.
+        <span class="page-ref">Overview pp. 26–28</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== TAB 4: DEPRECIATION ===== -->
+  <div id="tab-depreciation" class="tab-pane">
+    <p class="intro-text">
+      The depreciation building block comprises two components: <strong>(1) Standard regulatory depreciation</strong> — return of capital calculated using standard (straight-line) asset lives applied to the approved capital base; and <strong>(2) Accelerated depreciation</strong> — an additional approved amount to address stranded asset risk by returning capital to investors faster, at the cost of higher near-term prices for customers. Accelerated depreciation is determined under rule 89 of the National Gas Rules.
+    </p>
+
+    <div class="chart-grid chart-grid-2">
+      <div class="chart-card span-2">
+        <div class="chart-title">Regulatory Depreciation + Accelerated Depreciation (Combined)</div>
+        <div class="chart-sub">Nominal A$M (building block) + additional accelerated dep approved · Red portion = accelerated depreciation · Decisions ordered by network; lighter = prior, solid = current period</div>
+        <div class="chart-wrap" style="height:360px"><canvas id="depCombinedChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Approved Accelerated Depreciation</div>
+        <div class="chart-sub">Approved additional amount (A$M) per final decision · Grey bar = nil approved</div>
+        <div class="chart-wrap" style="height:280px"><canvas id="accelChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Standard Regulatory Depreciation</div>
+        <div class="chart-sub">Nominal A$M from building block revenue table</div>
+        <div class="chart-wrap" style="height:280px"><canvas id="stdDepChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="section-head">Depreciation Detail Table</div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Network / Period</th>
+            <th>Reg. Depreciation (Nominal $M)</th>
+            <th>Accelerated Dep. Approved ($M)</th>
+            <th>Accelerated Dep. Proposed ($M)</th>
+            <th>Outcome vs Proposal</th>
+            <th>Mechanism</th>
+          </tr>
+        </thead>
+        <tbody id="depTbody"></tbody>
+      </table>
+    </div>
+
+    <div class="section-head">Key Commentary</div>
+    <div class="commentary-box">
+      <div class="c-item">
+        <span class="c-network">JGN 2025–30 — $115M approved (vs $230M proposed):</span>
+        The AER approved $115M accelerated depreciation, halving JGN's $230M proposal. Of the approved $115M: $77M comes from shortened economic lives for certain asset classes; $38M comes from a reduction in the capital base. The AER considered $115M strikes an appropriate balance — providing a meaningful start to managing stranded asset risk while avoiding unnecessarily large price increases. The AER expects to revisit the appropriate level in future periods as demand trajectory becomes clearer.
+        <span class="page-ref">Overview pp. 7, 24–26</span>
+      </div>
+      <div class="c-item">
+        <span class="c-network">Evoenergy 2026–31 — $30M approved (vs $65M proposed):</span>
+        The AER approved $30M through shortened asset lives for HP and MP pipeline assets (to 19 years, aligned to ACT Government's 2045 gas network decommissioning target under the Integrated Energy Plan). An additional $35M proposed by Evoenergy beyond the reduced-asset-lives approach was <strong>not accepted</strong> — the AER found that reduced asset lives already addressed residual stranded asset risk materially, and that further accelerated depreciation would cause additional upward price pressure (~8.6% p.a. real network price increase) without sufficient justification.
+        <span class="page-ref">Overview pp. 5–6, 24–27</span>
+      </div>
+      <div class="c-item">
+        <span class="c-network">AGN SA 2021–26 — $250M approved:</span>
+        The largest single accelerated depreciation amount in this comparison, approved to recover the net book value of replaced mains and inlets from the major SA mains replacement program. This reflects the retirement of assets from service — a clear trigger for accelerated depreciation. The approved amount was lower than AGN's initial proposal, reflecting the AER's assessment of the quantum of eligible mains replacement and corrections to input errors in AGN's depreciation model.
+        <span class="page-ref">Overview pp. 34–36</span>
+      </div>
+      <div class="c-item">
+        <span class="c-network">AGN SA 2026–31 — $29M approved (vs $70M proposed):</span>
+        A dramatic fall from $250M in 2021–26, with the mains replacement program substantially complete. The $29M approved reflects only reduced asset lives for the Mains and Inlets asset classes (to 30 and 50 years respectively). AGN proposed $70M, arguing this was the minimum viable amount; the AER did not accept this, finding the reduced asset lives approach sufficient to address residual stranded asset risk at lower cost to consumers.
+        <span class="page-ref">Overview pp. 7–8, 22–24</span>
+      </div>
+      <div class="c-item">
+        <span class="c-network">AusNet 2023–28 — $105M approved (vs $200M proposed):</span>
+        The AER described this as a "measured start" to accelerated depreciation for AusNet's Victorian distribution network. The $105M reflects a proportionate response to stranded asset risk while maintaining price affordability for consumers. AusNet's $200M proposal was found to be larger than necessary at this stage, given uncertainty about the pace of gas demand decline. The AER noted it would monitor demand trajectory and revisit in future reviews.
+        <span class="page-ref">Overview pp. 6–7, 22–24</span>
+      </div>
+      <div class="c-item">
+        <span class="c-network">Multinet 2023–28 — $53M approved (vs $86M proposed):</span>
+        Similarly described as a "measured start" to accelerated depreciation for Multinet's aging Melbourne network. The $53M balances addressing stranded asset risk against price impacts for remaining customers. The AER's reduction ($33M from MGN's proposal) reflects the same approach applied to AusNet — deferring a larger step-change in accelerated depreciation until the demand trajectory is clearer.
+        <span class="page-ref">Overview pp. 6–7, 22–24</span>
+      </div>
+      <div class="c-item">
+        <span class="c-network">AGN Vic 2023–28 — $175M approved (as proposed):</span>
+        The largest accelerated depreciation approved in the current Victorian round, and the only Victorian decision where the proposal was <strong>accepted in full</strong> (the draft decision also accepted $175M). This reflects AGN's extensive Victorian network and the assessed stranded asset risk level. The approval without reduction (unlike AusNet and Multinet) may reflect AGN's stronger supporting evidence base for the proposed amount.
+        <span class="page-ref">Overview pp. 6, 22–24</span>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ===== TAB 5: NETWORK PERFORMANCE ===== -->
+  <div id="tab-performance" class="tab-pane active">
+    <p class="intro-text">
+      Annual operational and financial performance for all six gas distribution networks, sourced from AER Annual RIN submissions (2011–2024).
+      All dollar figures in real A$M (June 2025 prices). Solid lines = actual; dashed lines = target or AER-approved forecast.
+      Customer numbers in thousands; UAFG in terajoules (TJs).
+    </p>
+    <div class="data-note">
+      <strong>Source:</strong> AER Operational Performance Data 2026 — Gas Distribution Networks (Public). All revenue, capex and opex figures are in real $June 2025 terms.
+      Note: The Victorian government extended previous access arrangements for AGN Vic, AusNet and Multinet Gas by six months (Jan–Jun 2023); the AER has annualised figures for that year.
+    </div>
+
+    <!-- CUSTOMERS + GAS DELIVERED -->
+    <div class="section-head">Customer Numbers &amp; Gas Delivered</div>
+    <div class="chart-grid chart-grid-2">
+      <div class="chart-card">
+        <div class="chart-title">Customer Numbers</div>
+        <div class="chart-sub">000s · Total customers connected at end of regulatory year</div>
+        <div class="chart-wrap" style="height:280px"><canvas id="perfCustChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Gas Delivered</div>
+        <div class="chart-sub">TJs (000s) · Total gas distributed through each network</div>
+        <div class="chart-wrap" style="height:280px"><canvas id="perfGasChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="commentary-box">
+      <h3>Customer Numbers &amp; Gas Delivered — Key findings (AER Network Performance Report 2026)</h3>
+      <div class="c-item"><span class="c-network">Customer connections:</span> Net residential connections grew 1.5% across the sector in 2025. AGN Vic recorded the strongest growth at +3%. Multinet's customer base was broadly flat. The sector continues to add customers in aggregate, but growth rates have slowed markedly compared to earlier years.</div>
+      <div class="c-item"><span class="c-network">Evoenergy declining:</span> Evoenergy's customer numbers have fallen for the third consecutive year, following the ACT Government's ban on new gas connections introduced in December 2023. This is the first regulatory intervention of its kind in Australia to directly reduce gas customer growth. Evoenergy is the only network to face a structural customer decline as of 2025.</div>
+      <div class="c-item"><span class="c-network">Victorian electrification policy:</span> The Victorian Government has introduced electrification regulations (June 2025) requiring all-electric new buildings from 1 January 2027 and mandating gas hot water replacement at end-of-life from 1 March 2027. The AER notes that the impact of these policies is not expected to appear in regulatory reporting until the 2027 regulatory year, but they represent a material structural risk to future customer growth for AGN Vic, AusNet and Multinet.</div>
+      <div class="c-item"><span class="c-network">Gas delivered declining:</span> Aggregate gas delivered fell 3% in 2025, continuing a multi-year trend. JGN was the only network to record a slight increase. Evoenergy, AGN Vic, AGN SA and Multinet all fell more than 5%. Contributing factors include milder temperatures in 2025 (particularly in Victoria), ongoing electrification of appliances, improved appliance efficiency and cost-of-living pressures. Notably, the historical correlation between effective degree days (EDD) and gas demand has been weakening — suggesting structural drivers are increasingly dominant over weather.</div>
+    </div>
+
+    <!-- PER CUSTOMER -->
+    <div class="section-head">Per Customer Metrics (Derived)</div>
+    <p class="section-desc">Calculated as actual annual revenue or opex (real $m) ÷ customer numbers (000s) × 1,000 to give $ per customer per year. Allows cross-network comparison normalised for network size.</p>
+    <div class="chart-grid chart-grid-2">
+      <div class="chart-card">
+        <div class="chart-title">Actual Revenue per Customer</div>
+        <div class="chart-sub">$/customer/year (real June 2025) · Annual actual revenue ÷ end-of-year customer numbers</div>
+        <div class="chart-wrap" style="height:280px"><canvas id="perfRevCustChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Actual Opex per Customer</div>
+        <div class="chart-sub">$/customer/year (real June 2025) · Annual actual opex ÷ end-of-year customer numbers</div>
+        <div class="chart-wrap" style="height:280px"><canvas id="perfOpexCustChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="commentary-box">
+      <h3>Per Customer Metrics — Key findings (AER Network Performance Report 2026)</h3>
+      <div class="c-item"><span class="c-network">Revenue per customer:</span> Average revenue per customer across the sector was $365 in 2025, up $10 in real terms from 2024. The level and trajectory vary significantly between networks, reflecting differences in access arrangement allowances, network scale, tariff structures and the degree to which actual revenue tracks target revenue. Under weighted average price cap regulation, revenue per customer will fall if customer numbers grow faster than the total approved revenue — or if actual revenues fall below target due to declining gas throughput.</div>
+      <div class="c-item"><span class="c-network">Opex per customer:</span> Opex per customer reflects both scale efficiency and the nature of each network's obligations. Networks with large mains replacement or asset renewal programs tend to carry higher opex per customer in the near term. The sustained sector-wide underspend relative to AER allowances means actual opex per customer has generally tracked below what regulators expected when setting access arrangements.</div>
+      <div class="c-item"><span class="c-network">Cross-network comparison:</span> JGN and AGN SA tend to have lower opex per customer than smaller networks, reflecting scale benefits from larger customer bases. Multinet and AusNet sit in a mid-range. Evoenergy — despite being the smallest network — benefits from its all-polyethylene infrastructure (no metallic mains replacement) and a concentrated urban service area (ACT), resulting in relatively manageable per-customer costs. However, declining customer numbers in Evoenergy's network may push per-customer costs upward as fixed costs are spread across a shrinking base.</div>
+    </div>
+
+    <!-- REVENUE -->
+    <div class="section-head">Revenue</div>
+    <div class="chart-grid chart-grid-2">
+      <div class="chart-card">
+        <div class="chart-title">Actual Revenue</div>
+        <div class="chart-sub">Real A$M (June 2025) · Annual actual revenue reported by each DNSP</div>
+        <div class="chart-wrap" style="height:280px"><canvas id="perfRevActChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Target Revenue</div>
+        <div class="chart-sub">Real A$M (June 2025) · Access arrangement revenue adjusted for incentive scheme outcomes &amp; cost pass-throughs</div>
+        <div class="chart-wrap" style="height:280px"><canvas id="perfRevTgtChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="commentary-box">
+      <h3>Revenue — Key findings (AER Network Performance Report 2026)</h3>
+      <div class="c-item"><span class="c-network">Aggregate 2025:</span> DNSPs collectively recovered $1.7 billion in revenue in 2025 — up $63M (4%) from 2024. Average revenue per customer was $365, an increase of $10 in real terms. Despite this, aggregate revenue remains around 17% below the 2015 peak, reflecting structural demand decline and falling access arrangement allowances over time.</div>
+      <div class="c-item"><span class="c-network">Actual vs target:</span> All DNSPs except AusNet earned below their target revenue in 2025. AusNet was the only network to marginally exceed its target (+0.4%). This is a direct consequence of the weighted average price cap regime — under which demand risk sits entirely with the DNSP, not customers. Gas delivered across the sector fell ~3% in 2025, compressing actual revenues below approved targets.</div>
+      <div class="c-item"><span class="c-network">JGN (+14%):</span> JGN recorded the largest revenue increase, driven by a tariff reconciliation for unaccounted-for-gas (UAFG) costs arising from elevated gas price volatility in 2022–23. This was a pass-through mechanism rather than a reflection of increased demand or pricing.</div>
+    </div>
+
+    <!-- OPEX -->
+    <div class="section-head">Operating Expenditure</div>
+    <div class="chart-grid chart-grid-2">
+      <div class="chart-card">
+        <div class="chart-title">Actual Opex</div>
+        <div class="chart-sub">Real A$M (June 2025) · Network operations, maintenance and non-capital costs</div>
+        <div class="chart-wrap" style="height:280px"><canvas id="perfOpexActChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">AER-Approved Forecast Opex</div>
+        <div class="chart-sub">Real A$M (June 2025) · Annual forecast from access arrangement PTRMs</div>
+        <div class="chart-wrap" style="height:280px"><canvas id="perfOpexFcstChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="commentary-box">
+      <h3>Operating Expenditure — Key findings (AER Network Performance Report 2026)</h3>
+      <div class="c-item"><span class="c-network">Aggregate 2025:</span> Total opex across all six DNSPs was $614M in 2025, up 2% from 2024. For the eighth consecutive year, the sector collectively spent below its AER-approved allowance — with a cumulative $543M (11%) underspend since 2018. This sustained efficiency trend reflects both effective cost management and the incentive properties of the regulatory framework, where networks retain a share of any savings relative to allowances.</div>
+      <div class="c-item"><span class="c-network">Recent overspends:</span> In the last five years, only two exceptions occurred: AGN Vic marginally overspent in 2021, and JGN recorded an opex overspend in 2024 driven by elevated UAFG gas purchase costs (a cost pass-through item tied to gas price spikes). No DNSP recorded a significant structural opex overspend across the period.</div>
+      <div class="c-item"><span class="c-network">Incentive effects:</span> The incentive framework means that sustained efficiency gains reduce future approved allowances — regulators use actual expenditure as a benchmark for setting forecasts in subsequent access arrangements. This creates a ratchet-like dynamic where continued underspending raises the bar for future periods.</div>
+    </div>
+
+    <!-- CAPEX -->
+    <div class="section-head">Capital Expenditure</div>
+    <div class="chart-grid chart-grid-2">
+      <div class="chart-card">
+        <div class="chart-title">Actual Capex</div>
+        <div class="chart-sub">Real A$M (June 2025) · Net capex (gross less capital contributions and disposals)</div>
+        <div class="chart-wrap" style="height:280px"><canvas id="perfCapexActChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">AER-Approved Forecast Capex</div>
+        <div class="chart-sub">Real A$M (June 2025) · Annual forecast from access arrangement PTRMs</div>
+        <div class="chart-wrap" style="height:280px"><canvas id="perfCapexFcstChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="commentary-box">
+      <h3>Capital Expenditure — Key findings (AER Network Performance Report 2026)</h3>
+      <div class="c-item"><span class="c-network">Aggregate 2025:</span> Total capex across all networks was $628M in 2025 — up 10% from 2024, but still approximately 10% below the AER-approved allowance. The increase was primarily driven by greater mains replacement activity and higher ICT spend; new customer connections fell slightly year-on-year.</div>
+      <div class="c-item"><span class="c-network">Mains replacement programs:</span> AGN SA, AusNet and Multinet are still in the process of completing significant mains replacement programs — replacing aged metallic pipes with polyethylene. These programs drive a large share of capex for those networks and are a key determinant of their relative capex profiles.</div>
+      <div class="c-item"><span class="c-network">Evoenergy:</span> Evoenergy has no mains replacement program. Its network was built entirely of polyethylene from 1982, meaning it does not face the same legacy asset renewal obligations as the Victorian and South Australian networks. Evoenergy's capex is consequently lower and more stable relative to its network size.</div>
+    </div>
+
+    <!-- CAB + UAFG -->
+    <div class="section-head">Capital Asset Base &amp; Unaccounted For Gas</div>
+    <div class="chart-grid chart-grid-2">
+      <div class="chart-card">
+        <div class="chart-title">Actual Capital Asset Base</div>
+        <div class="chart-sub">Real A$M (June 2025) · Closing CAB as at 30 June each year</div>
+        <div class="chart-wrap" style="height:280px"><canvas id="perfCabChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Unaccounted For Gas (UAFG)</div>
+        <div class="chart-sub">TJs · Difference between gas entering the network and gas delivered to customers</div>
+        <div class="chart-wrap" style="height:280px"><canvas id="perfUafgChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="commentary-box">
+      <h3>Capital Asset Base &amp; UAFG — Key findings (AER Network Performance Report 2026)</h3>
+      <div class="c-item"><span class="c-network">CAB growth:</span> The aggregate CAB across all six networks grew by 1.4% in real terms in 2025, reaching approximately $12.3 billion. CAB per customer remained broadly stable, but CAB per GJ delivered rose $2 to $47/GJ — up $15/GJ since 2011. The divergence between asset base growth and declining gas throughput is putting sustained upward pressure on efficiency metrics and future pricing.</div>
+      <div class="c-item"><span class="c-network">AGN SA standout:</span> AGN SA has the highest CAB/GJ delivered of any network at $115/GJ — nearly double the next highest — and has increased by 99% since 2011. This reflects a combination of continued CAB growth (driven by mains replacement) alongside a ~40% fall in industrial gas delivered, which significantly reduces the denominator. This dynamic is a key driver of AGN SA's revenue per customer trajectory.</div>
+      <div class="c-item"><span class="c-network">UAFG — overall improvement:</span> The sector-wide UAFG loss rate improved to 3.3% in 2025, from 3.6% in 2024. Victorian networks (particularly Multinet) record higher UAFG loss rates than other networks. UAFG arises from a combination of leakage, metering errors, differences in gas heating values, data quality issues, and in rare cases, theft.</div>
+      <div class="c-item"><span class="c-network">Evoenergy anomaly:</span> Evoenergy reported a negative UAFG figure in 2025, which the AER attributes to measurement or calculation error rather than a genuine gas surplus. Negative UAFG is physically implausible and should be treated as a data quality artefact.</div>
+    </div>
+
+  </div><!-- /tab-performance -->
+
+</div><!-- /content -->
+
+<script>
+// ============================================================
+// DATA
+// ============================================================
+const D = [
+  { id:'JGN_P',  net:'JGN',       lbl:'JGN 2020–25',      type:'prior',   color:'#1565C0', alpha:'rgba(21,101,192,0.45)',
+    rev:{ roc:754.7,  regDep:444.2, opex:1169.7, tax:9.3,   revAdj:-184.5, total:2175.9 },
+    capex:{ v:865.0,  base:'$2019–20' }, opex:{ v:1091.7, base:'$2019–20', vsProp:'Accepted (–$4.3M alt. vs proposal)' },
+    dep:{ std:444.2, accel:0,   prop:null },
+    capexNote:'Connections, distribution mains, meter replacement, mains replacement' },
+  { id:'JGN_C',  net:'JGN',       lbl:'JGN 2025–30',      type:'current', color:'#1565C0', alpha:'rgba(21,101,192,0.88)',
+    rev:{ roc:1236.4, regDep:518.4, opex:1241.6, tax:70.3,  revAdj:40.0,   total:3106.7 },
+    capex:{ v:717.4,  base:'$2024–25' }, opex:{ v:1144.9, base:'$2024–25', vsProp:'–$3.6M below revised proposal' },
+    dep:{ std:518.4, accel:115.0, prop:230.0, mech:'$77M shortened asset lives + $38M capital base reduction' },
+    capexNote:'Connections (+$35M), distribution mains, meter replacement; renewable connections excluded (–$78.9M)' },
+  { id:'EVO_P',  net:'Evoenergy', lbl:'Evoenergy 2021–26', type:'prior',   color:'#E65100', alpha:'rgba(230,81,0,0.45)',
+    rev:{ roc:84.5,   regDep:50.1,  opex:181.6,  tax:2.9,   revAdj:-1.4,   total:317.4  },
+    capex:{ v:50.9,   base:'$2020–21' }, opex:{ v:171.0,  base:'$2020–21', vsProp:'Accepted (AER alt. –$3.9M vs proposal)' },
+    dep:{ std:50.1,  accel:0,   prop:null },
+    capexNote:'Connections, meter replacement, network maintenance' },
+  { id:'EVO_C',  net:'Evoenergy', lbl:'Evoenergy 2026–31', type:'current', color:'#E65100', alpha:'rgba(230,81,0,0.88)',
+    rev:{ roc:123.9,  regDep:86.7,  opex:184.0,  tax:11.1,  revAdj:7.5,    total:412.8  },
+    capex:{ v:31.4,   base:'$2025–26' }, opex:{ v:171.0,  base:'$2025–26', vsProp:'–$4.4M below revised proposal' },
+    dep:{ std:86.7,  accel:30.0,  prop:65.0,  mech:'HP/MP pipeline lives reduced to 19yr (2045 target); additional $35M beyond asset lives not accepted' },
+    capexNote:'Meter replacement (48%), network overheads (40%), connections (1%)' },
+  { id:'AGNSA_P',net:'AGN SA',    lbl:'AGN SA 2021–26',   type:'prior',   color:'#2E7D32', alpha:'rgba(46,125,50,0.45)',
+    rev:{ roc:414.0,  regDep:322.9, opex:390.8,  tax:0.0,   revAdj:6.8,    total:1122.2 },
+    capex:{ v:512.3,  base:'$2020–21' }, opex:{ v:355.6,  base:'$2020–21', vsProp:'Accepted (AER alt. –$4.3M vs proposal)' },
+    dep:{ std:322.9, accel:250.0, prop:251.5, mech:'Net book value of replaced mains/inlets from SA mains replacement program' },
+    capexNote:'Major mains replacement program, connections, ICT' },
+  { id:'AGNSA_C',net:'AGN SA',    lbl:'AGN SA 2026–31',   type:'current', color:'#2E7D32', alpha:'rgba(46,125,50,0.88)',
+    rev:{ roc:706.1,  regDep:166.1, opex:512.6,  tax:0.0,   revAdj:8.3,    total:1370.3 },
+    capex:{ v:332.3,  base:'$2025–26' }, opex:{ v:456.7,  base:'$2025–26', vsProp:'+$22.8M above revised proposal (abolishment costs added)' },
+    dep:{ std:166.1, accel:29.0,  prop:70.0,  mech:'Reduced asset lives: Mains to 30yr, Inlets to 50yr; $70M proposal not accepted' },
+    capexNote:'ICT (20.7%), Other Network (27.8%), Mains Replacement (25.7%), Meter Replacement (10.8%)' },
+  { id:'AUS_P',  net:'AusNet',    lbl:'AusNet 2018–22',   type:'prior',   color:'#039BE5', alpha:'rgba(3,155,229,0.45)',
+    rev:{ roc:506.0, regDep:185.1, opex:293.2, tax:47.1, revAdj:9.1, total:1040.1 },
+    capex:{ v:477.5, base:'$2017' }, opex:{ v:272.3, base:'$2017', vsProp:'Accepted (+$3.7M for updated demand forecasts)' },
+    dep:{ std:185.1, accel:0, prop:null },
+    capexNote:'Connections/growth (208.1), mains replacement (114.5), IT (54.9), meter replacement (28.3), augmentation (13.1), other' },
+  { id:'AUS_C',  net:'AusNet',    lbl:'AusNet 2023–28',   type:'current', color:'#039BE5', alpha:'rgba(3,155,229,0.88)',
+    rev:{ roc:568.1,  regDep:281.4, opex:417.1,  tax:42.0,  revAdj:-3.8,   total:1270.3 },
+    capex:{ v:427.6,  base:'$2022–23' }, opex:{ v:349.8,  base:'$2022–23', vsProp:'+$14.5M above revised proposal (abolishment costs added)' },
+    dep:{ std:281.4, accel:105.0, prop:200.0, mech:'"Measured start" — proportionate to stranded asset risk; $200M proposal reduced to $105M' },
+    capexNote:'Connections ($187M), augmentation ($19.8M), mains replacement completion, IT, meter replacement' },
+  { id:'MGN_P',  net:'Multinet',  lbl:'MGN 2018–22',      type:'prior',   color:'#6A1B9A', alpha:'rgba(106,27,154,0.45)',
+    rev:{ roc:368.5,  regDep:198.3, opex:414.6,  tax:60.8,  revAdj:-5.6,   total:1035.5 },
+    capex:{ v:394.1,  base:'$2017'    }, opex:{ v:385.1,  base:'$2017',    vsProp:'Accepted' },
+    dep:{ std:198.3, accel:0,   prop:null },
+    capexNote:'Mains replacement program, connections, maintenance' },
+  { id:'MGN_C',  net:'Multinet',  lbl:'MGN 2023–28',      type:'current', color:'#6A1B9A', alpha:'rgba(106,27,154,0.88)',
+    rev:{ roc:465.2,  regDep:225.4, opex:497.2,  tax:22.4,  revAdj:-28.2,  total:1154.9 },
+    capex:{ v:668.7,  base:'$2022–23' }, opex:{ v:432.8,  base:'$2022–23', vsProp:'+$33.5M above revised proposal (abolishment costs added)' },
+    dep:{ std:225.4, accel:53.0,  prop:86.0,  mech:'"Measured start" — $86M proposal reduced to $53M; mains replacement cost pressures noted' },
+    capexNote:'Mains replacement $408M (61%), connections, maintenance' },
+  { id:'VIC_P',  net:'AGN Vic',   lbl:'AGN Vic 2018–22',  type:'prior',   color:'#AD1457', alpha:'rgba(173,20,87,0.45)',
+    rev:{ roc:500.5, regDep:236.7, opex:374.4, tax:59.9, revAdj:19.8, total:1193.5 },
+    capex:{ v:549.6, base:'$2017' }, opex:{ v:347.8, base:'$2017', vsProp:'Accepted (+$3.7M for updated demand forecasts)' },
+    dep:{ std:236.7, accel:0, prop:null },
+    capexNote:'Growth/connections (180.1), mains replacement (150.0), IT (64.6), augmentation (34.7), meter replacement (33.0), other' },
+  { id:'VIC_C',  net:'AGN Vic',   lbl:'AGN Vic 2023–28',  type:'current', color:'#AD1457', alpha:'rgba(173,20,87,0.88)',
+    rev:{ roc:589.6,  regDep:287.5, opex:583.7,  tax:28.0,  revAdj:-93.0,  total:1362.1 },
+    capex:{ v:433.5,  base:'$2022–23' }, opex:{ v:506.5,  base:'$2022–23', vsProp:'+$29.1M above revised proposal (abolishment costs added)' },
+    dep:{ std:287.5, accel:175.0, prop:175.0, mech:'Accepted as proposed — largest Vic approval; accepted also in draft decision' },
+    capexNote:'Connections ($166.1M), augmentation ($57.8M), mains replacement completion, IT' }
+];
+
+const NETS = ['JGN','Evoenergy','AGN SA','AusNet','Multinet','AGN Vic'];
+function byNet() {
+  return NETS.map(n => ({ net:n, P:D.find(d=>d.net===n&&d.type==='prior'), C:D.find(d=>d.net===n&&d.type==='current') }));
+}
+
+// ============================================================
+// TAB SWITCHING
+// ============================================================
+function switchTab(tab, btn) {
+  document.querySelectorAll('.tab-pane').forEach(e => e.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(e => e.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ============================================================
+// REVENUE TABLE
+// ============================================================
+const revTbody = document.getElementById('revTbody');
+D.forEach(d => {
+  const tr = document.createElement('tr');
+  tr.className = d.type === 'prior' ? 'prior-row' : 'current-row';
+  const badge = `<span class="network-badge" style="background:${d.color}">${d.net}</span>`;
+  if (!d.rev) {
+    tr.innerHTML = `<td>${badge}${d.lbl}</td><td colspan="6" class="na-cell">⚠️ ${d.note}</td>`;
+  } else {
+    const fmt = v => v === 0 ? '0.0' : v > 0 ? v.toFixed(1) : `<span class="neg">(${Math.abs(v).toFixed(1)})</span>`;
+    tr.innerHTML = `<td>${badge}${d.lbl}</td>
+      <td>${d.rev.roc.toFixed(1)}</td>
+      <td>${d.rev.regDep.toFixed(1)}</td>
+      <td>${d.rev.opex.toFixed(1)}</td>
+      <td>${d.rev.tax.toFixed(1)}</td>
+      <td>${fmt(d.rev.revAdj)}</td>
+      <td class="total-cell">$${d.rev.total.toFixed(1)}M</td>`;
+  }
+  revTbody.appendChild(tr);
+});
+
+// ============================================================
+// CAPEX TABLE — pivoted (one row per network)
+// ============================================================
+const capexTbody = document.getElementById('capexTbody');
+byNet().forEach(({ net, P, C }) => {
+  const tr = document.createElement('tr');
+  const badge = `<span class="network-badge" style="background:${C.color}">${net}</span>`;
+  const pCell = P?.capex
+    ? `<span style="color:#888;font-size:11px">${P.period}</span><br><strong>$${P.capex.v.toFixed(1)}M</strong> <span style="color:#aaa;font-size:11px">(${P.capex.base})</span>`
+    : '<span class="na-cell">N/A</span>';
+  const cCell = C?.capex
+    ? `<span style="color:#888;font-size:11px">${C.period}</span><br><strong>$${C.capex.v.toFixed(1)}M</strong> <span style="color:#aaa;font-size:11px">(${C.capex.base})</span>`
+    : '<span class="na-cell">N/A</span>';
+  tr.innerHTML = `<td>${badge}</td>
+    <td>${pCell}</td>
+    <td>${cCell}</td>
+    <td style="font-size:12px;white-space:normal">${C?.capexNote || '—'}</td>`;
+  capexTbody.appendChild(tr);
+});
+
+// ============================================================
+// OPEX TABLE — pivoted (one row per network)
+// ============================================================
+const opexTbody = document.getElementById('opexTbody');
+const opexNotes = {
+  'JGN_C':   'Includes $12.7M abolishment costs (new); $9.7M debt raising costs',
+  'EVO_C':   '$4.4M reduction vs proposal; lower forecast for one opex category',
+  'AGNSA_C': 'Underlying $433.9M accepted; $22.8M abolishment costs added by AER',
+  'AUS_C':   '$335.3M underlying accepted; $14.5M abolishment costs added by AER',
+  'MGN_C':   '$399.4M underlying accepted; $33.5M abolishment costs added by AER',
+  'VIC_C':   '$477.5M underlying accepted; $29.1M abolishment costs added by AER',
+};
+byNet().forEach(({ net, P, C }) => {
+  const tr = document.createElement('tr');
+  const badge = `<span class="network-badge" style="background:${C.color}">${net}</span>`;
+  const pCell = P?.opex
+    ? `<span style="color:#888;font-size:11px">${P.period}</span><br><strong>$${P.opex.v.toFixed(1)}M</strong> <span style="color:#aaa;font-size:11px">(${P.opex.base})</span>`
+    : '<span class="na-cell">N/A</span>';
+  const cCell = C?.opex
+    ? `<span style="color:#888;font-size:11px">${C.period}</span><br><strong>$${C.opex.v.toFixed(1)}M</strong> <span style="color:#aaa;font-size:11px">(${C.opex.base})</span>`
+    : '<span class="na-cell">N/A</span>';
+  tr.innerHTML = `<td>${badge}</td>
+    <td>${pCell}</td>
+    <td>${cCell}</td>
+    <td style="font-size:12px">${C?.opex?.vsProp || '—'}</td>
+    <td style="font-size:12px;white-space:normal">${C ? (opexNotes[C.id] || '—') : '—'}</td>`;
+  opexTbody.appendChild(tr);
+});
+
+// ============================================================
+// DEPRECIATION TABLE
+// ============================================================
+const depTbody = document.getElementById('depTbody');
+D.filter(d => d.dep !== null).forEach(d => {
+  const tr = document.createElement('tr');
+  tr.className = d.type === 'prior' ? 'prior-row' : 'current-row';
+  const badge = `<span class="network-badge" style="background:${d.color}">${d.net}</span>`;
+  const accelStr = d.dep.accel > 0 ? `<strong>$${d.dep.accel.toFixed(0)}M</strong>` : '<span class="na-cell">Nil</span>';
+  const propStr  = d.dep.prop  ? `$${d.dep.prop.toFixed(0)}M` : '<span class="na-cell">—</span>';
+  const outcome  = d.dep.accel > 0 && d.dep.prop
+    ? (d.dep.accel < d.dep.prop ? `<span class="neg">–$${(d.dep.prop-d.dep.accel).toFixed(0)}M below proposal</span>` : '✓ Accepted as proposed')
+    : (d.dep.accel === 0 ? '<span class="na-cell">Not applicable</span>' : '—');
+  const mech = d.dep.mech || (d.dep.accel === 0 ? 'No accelerated depreciation approved' : '—');
+  tr.innerHTML = `<td>${badge}${d.lbl}</td>
+    <td>$${d.dep.std.toFixed(1)}M</td>
+    <td>${accelStr}</td>
+    <td>${propStr}</td>
+    <td style="font-size:12px">${outcome}</td>
+    <td style="font-size:12px;white-space:normal;min-width:240px">${mech}</td>`;
+  depTbody.appendChild(tr);
+});
+
+// ============================================================
+// CHART HELPERS
+// ============================================================
+function chartOpts(yLabel, fmt) {
+  return {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { position:'top', labels:{ font:{ size:11 }, boxWidth:14 } },
+      tooltip: { callbacks: { label: ctx => ctx.raw !== null && ctx.raw !== undefined ? fmt(ctx.raw) : 'N/A' } }
+    },
+    scales: {
+      x: { grid:{ display:false }, ticks:{ font:{ size:11 } } },
+      y: { beginAtZero:true, title:{ display:true, text:yLabel, font:{ size:11 } }, ticks:{ callback: v => '$'+v.toLocaleString()+'M', font:{ size:11 } } }
+    }
+  };
+}
+
+function fmtM(v) { return '$' + v.toFixed(1) + 'M'; }
+
+// ============================================================
+// CHART 1: TOTAL REVENUE
+// ============================================================
+const rNets = byNet();
+new Chart(document.getElementById('revTotalChart'), {
+  type: 'bar',
+  data: {
+    labels: NETS,
+    datasets: [
+      { label:'Prior Period', data: rNets.map(n => n.P?.rev?.total ?? null),
+        backgroundColor: rNets.map(n => n.P?.alpha || 'rgba(180,180,180,0.4)'),
+        borderColor:     rNets.map(n => n.P?.color || '#aaa'),
+        borderWidth:1.5, borderRadius:3 },
+      { label:'Current Period', data: rNets.map(n => n.C?.rev?.total ?? null),
+        backgroundColor: rNets.map(n => n.C?.alpha || 'rgba(180,180,180,0.8)'),
+        borderColor:     rNets.map(n => n.C?.color || '#aaa'),
+        borderWidth:1.5, borderRadius:3 }
+    ]
+  },
+  options: chartOpts('Nominal A$M', fmtM)
+});
+
+// ============================================================
+// CHART 2: BUILDING BLOCKS STACKED
+// ============================================================
+const validRev = D.filter(d => d.rev !== null);
+const bbLabels = validRev.map(d => d.lbl.replace(' ', '\n'));
+new Chart(document.getElementById('revBBChart'), {
+  type: 'bar',
+  data: {
+    labels: validRev.map(d => d.lbl),
+    datasets: [
+      { label:'Return on Capital',         data: validRev.map(d => d.rev.roc),    backgroundColor:'rgba(21,101,192,0.85)',  stack:'s' },
+      { label:'Regulatory Depreciation',   data: validRev.map(d => d.rev.regDep), backgroundColor:'rgba(46,125,50,0.85)',   stack:'s' },
+      { label:'Operating Expenditure',     data: validRev.map(d => d.rev.opex),   backgroundColor:'rgba(230,81,0,0.80)',    stack:'s' },
+      { label:'Corporate Income Tax',      data: validRev.map(d => d.rev.tax),    backgroundColor:'rgba(106,27,154,0.80)',  stack:'s' },
+      { label:'Revenue Adjustments (+/–)', data: validRev.map(d => d.rev.revAdj),
+        backgroundColor: validRev.map(d => d.rev.revAdj >= 0 ? 'rgba(0,150,136,0.85)' : 'rgba(198,40,40,0.75)'),
+        borderColor:     validRev.map(d => d.rev.revAdj >= 0 ? '#00695C' : '#7f0000'),
+        borderWidth:1, stack:'s' }
+    ]
+  },
+  options: {
+    responsive:true, maintainAspectRatio:false,
+    plugins: {
+      legend: { position:'top', labels:{ font:{size:11}, boxWidth:14 } },
+      tooltip: { callbacks: { label: ctx => {
+        const v = ctx.raw;
+        return `${ctx.dataset.label}: ${v >= 0 ? '' : '–'}$${Math.abs(v).toFixed(1)}M`;
+      }}}
+    },
+    scales: {
+      x: { stacked:true, grid:{display:false}, ticks:{ font:{size:10}, maxRotation:40 } },
+      y: { stacked:true, title:{display:true, text:'Nominal A$M', font:{size:11}},
+           ticks:{ callback: v => '$'+v.toLocaleString()+'M', font:{size:11} } }
+    }
+  }
+});
+
+// ============================================================
+// CHART 3: CAPEX
+// ============================================================
+const cNets = byNet();
+new Chart(document.getElementById('capexChart'), {
+  type:'bar',
+  data: {
+    labels: NETS,
+    datasets:[
+      { label:'Prior Period', data: cNets.map(n => n.P?.capex?.v ?? null),
+        backgroundColor: cNets.map(n => n.P?.alpha || 'rgba(180,180,180,0.4)'),
+        borderColor:     cNets.map(n => n.P?.color || '#aaa'), borderWidth:1.5, borderRadius:3 },
+      { label:'Current Period', data: cNets.map(n => n.C?.capex?.v ?? null),
+        backgroundColor: cNets.map(n => n.C?.alpha || 'rgba(180,180,180,0.8)'),
+        borderColor:     cNets.map(n => n.C?.color || '#aaa'), borderWidth:1.5, borderRadius:3 }
+    ]
+  },
+  options: chartOpts('Real A$M (base yr varies)', fmtM)
+});
+
+// ============================================================
+// CHART 4: OPEX
+// ============================================================
+new Chart(document.getElementById('opexChart'), {
+  type:'bar',
+  data: {
+    labels: NETS,
+    datasets:[
+      { label:'Prior Period', data: cNets.map(n => n.P?.opex?.v ?? null),
+        backgroundColor: cNets.map(n => n.P?.alpha || 'rgba(180,180,180,0.4)'),
+        borderColor:     cNets.map(n => n.P?.color || '#aaa'), borderWidth:1.5, borderRadius:3 },
+      { label:'Current Period', data: cNets.map(n => n.C?.opex?.v ?? null),
+        backgroundColor: cNets.map(n => n.C?.alpha || 'rgba(180,180,180,0.8)'),
+        borderColor:     cNets.map(n => n.C?.color || '#aaa'), borderWidth:1.5, borderRadius:3 }
+    ]
+  },
+  options: chartOpts('Real A$M (base yr varies)', fmtM)
+});
+
+// ============================================================
+// CHART 5: DEPRECIATION — COMBINED STACKED
+// ============================================================
+const validDep = D.filter(d => d.dep !== null);
+new Chart(document.getElementById('depCombinedChart'), {
+  type:'bar',
+  data: {
+    labels: validDep.map(d => d.lbl),
+    datasets:[
+      { label:'Standard Regulatory Depreciation (Nominal $M)',
+        data: validDep.map(d => d.dep.std),
+        backgroundColor: validDep.map(d => d.alpha),
+        borderColor:     validDep.map(d => d.color),
+        borderWidth:1.5, stack:'dep',
+        borderSkipped:'bottom' },
+      { label:'Accelerated Depreciation Approved ($M)',
+        data: validDep.map(d => d.dep.accel),
+        backgroundColor: validDep.map(d => d.dep.accel > 0 ? 'rgba(198,40,40,0.80)' : 'rgba(0,0,0,0)'),
+        borderColor:     validDep.map(d => d.dep.accel > 0 ? '#7f0000' : 'rgba(0,0,0,0)'),
+        borderWidth: validDep.map(d => d.dep.accel > 0 ? 1.5 : 0),
+        stack:'dep', borderSkipped:'bottom' }
+    ]
+  },
+  options: {
+    responsive:true, maintainAspectRatio:false,
+    plugins: {
+      legend:{ position:'top', labels:{ font:{size:11}, boxWidth:14 } },
+      tooltip:{ callbacks:{ label: ctx => `${ctx.dataset.label}: $${ctx.raw.toFixed(1)}M` } }
+    },
+    scales: {
+      x:{ stacked:true, grid:{display:false}, ticks:{ font:{size:10}, maxRotation:40 } },
+      y:{ stacked:true, beginAtZero:true,
+          title:{display:true, text:'A$M', font:{size:11}},
+          ticks:{ callback: v => '$'+v.toLocaleString()+'M', font:{size:11} } }
+    }
+  }
+});
+
+// ============================================================
+// CHART 6: ACCELERATED DEPRECIATION — APPROVED BARS + PROPOSED POINTS
+// ============================================================
+new Chart(document.getElementById('accelChart'), {
+  type:'bar',
+  data: {
+    labels: validDep.map(d => d.lbl),
+    datasets:[
+      { label:'Approved',
+        data: validDep.map(d => d.dep.accel),
+        backgroundColor: validDep.map(d => d.dep.accel > 0 ? d.alpha : 'rgba(220,220,220,0.5)'),
+        borderColor:     validDep.map(d => d.dep.accel > 0 ? d.color : '#ccc'),
+        borderWidth:1.5, borderRadius:3,
+        type:'bar', order:2
+      },
+      { label:'Proposed (for reference)',
+        data: validDep.map(d => d.dep.prop ?? null),
+        backgroundColor: 'rgba(0,0,0,0)',
+        borderColor: validDep.map(d => d.color),
+        borderWidth:2,
+        pointStyle:'diamond',
+        pointRadius:7,
+        pointHoverRadius:9,
+        showLine:false,
+        type:'scatter', order:1
+      }
+    ]
+  },
+  options: {
+    responsive:true, maintainAspectRatio:false,
+    plugins: {
+      legend:{ position:'top', labels:{ font:{size:11}, boxWidth:14,
+        generateLabels: chart => [
+          { text:'Approved', fillStyle:'rgba(100,100,200,0.6)', strokeStyle:'#555', lineWidth:1 },
+          { text:'Proposed (◆)', fillStyle:'rgba(0,0,0,0)', strokeStyle:'#333', lineWidth:2 }
+        ]
+      }},
+      tooltip:{ callbacks:{ label: ctx => {
+        if (ctx.dataset.type === 'scatter') return ctx.raw !== null ? `Proposed: $${ctx.raw.toFixed(0)}M` : null;
+        return ctx.raw > 0 ? `Approved: $${ctx.raw.toFixed(0)}M` : 'Approved: Nil';
+      }}}
+    },
+    scales: {
+      x:{ grid:{display:false}, ticks:{ font:{size:10}, maxRotation:40 } },
+      y:{ beginAtZero:true, title:{display:true, text:'A$M', font:{size:11}},
+          ticks:{ callback: v => '$'+v.toLocaleString()+'M', font:{size:11} } }
+    }
+  }
+});
+
+// ============================================================
+// CHART 7: STANDARD REGULATORY DEPRECIATION
+// ============================================================
+new Chart(document.getElementById('stdDepChart'), {
+  type:'bar',
+  data: {
+    labels: validDep.map(d => d.lbl),
+    datasets:[{ label:'Standard Reg. Depreciation',
+      data: validDep.map(d => d.dep.std),
+      backgroundColor: validDep.map(d => d.alpha),
+      borderColor:     validDep.map(d => d.color),
+      borderWidth:1.5, borderRadius:3
+    }]
+  },
+  options: {
+    responsive:true, maintainAspectRatio:false,
+    plugins: { legend:{display:false},
+      tooltip:{ callbacks:{ label: ctx => `$${ctx.raw.toFixed(1)}M (nominal)` } } },
+    scales: {
+      x:{ grid:{display:false}, ticks:{ font:{size:10}, maxRotation:40 } },
+      y:{ beginAtZero:true, title:{display:true, text:'Nominal A$M', font:{size:11}},
+          ticks:{ callback: v => '$'+v.toLocaleString()+'M', font:{size:11} } }
+    }
+  }
+});
+
+// ============================================================
+// PERFORMANCE TAB DATA
+// ============================================================
+const PERF_YEARS      = [2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024];
+const PERF_YEARS_CUST = [2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025];
+
+const PD = [
+  { id:'EVO',  name:'Evoenergy', color:'#E65100',
+    revTarget:  [71.5,75.4,80.4,86.1,92.5,88.6,69.5,76.8,81.9,78.9,78.1,71.6,78.4,81.0],
+    revActual:  [82.8,93.9,95.2,91.9,97.1,92.9,77.4,76.5,77.3,77.1,79.8,76.0,74.3,69.9],
+    opexFcst:   [30.7,33.5,34.2,33.9,34.3,36.2,39.2,39.6,40.3,41.3,41.3,39.2,40.8,40.0],
+    opexActual: [34.0,35.6,34.2,33.4,36.5,33.1,35.1,37.1,36.8,37.8,36.1,35.0,35.0,36.2],
+    capexFcst:  [38.5,37.3,17.4,15.7,16.7,39.4,23.0,22.3,21.7,17.3,18.7,17.3,15.4,10.5],
+    capexActual:[16.5,19.9,24.6,23.7,30.6,21.8,24.2,15.9,15.8,16.6,13.5,11.1,10.7,9.4],
+    cabActual:  [416.2,421.5,430.1,437.3,441.7,449.6,457.6,456.2,453.7,451.3,448.0,441.9,434.8,424.9],
+    uafg:       [183.3,177.2,165.4,131.7,151.6,113.5,193.5,221.5,234.1,234.9,180.8,206.0,198.5,194.8],
+    customers:  [118.7,122.7,127.5,132.1,136.2,139.4,144.3,149.7,152.5,155.9,157.7,157.3,154.6,153.5,151.6],
+    gasDelivered:[8.29,8.43,8.05,7.59,8.15,7.78,8.38,8.08,7.91,7.74,7.98,7.95,7.85,6.78] },
+  { id:'JGN',  name:'JGN', color:'#1565C0',
+    revTarget:  [558.9,573.6,632.2,688.8,754.3,622.1,552.6,514.0,495.3,497.5,484.6,496.0,497.5,541.3],
+    revActual:  [579.9,620.6,676.7,726.4,819.2,691.2,690.8,653.9,637.5,641.0,515.5,506.0,468.1,505.9],
+    opexFcst:   [195.8,202.4,208.8,213.7,218.2,203.2,206.1,207.4,213.5,212.5,247.1,257.8,266.3,267.0],
+    opexActual: [199.6,198.7,216.3,212.7,204.4,211.9,224.1,218.2,224.4,215.5,198.2,203.9,249.0,268.0],
+    capexFcst:  [215.8,202.4,200.0,228.2,248.1,288.7,267.8,272.1,240.4,208.0,227.6,222.5,198.9,190.8],
+    capexActual:[222.5,234.9,175.4,187.9,279.2,261.9,230.6,236.1,203.0,182.4,182.9,158.9,158.6,154.0],
+    cabActual:  [3537.8,3647.3,3686.0,3726.4,3897.2,3975.9,4007.1,4029.1,4006.6,3980.5,3990.2,3967.2,3939.5,3892.5],
+    uafg:       [2576.9,2354.8,2070.8,2037.1,2544.1,1957.1,2433.2,2682.1,2367.9,2906.2,2086.8,2558.5,2482.8,2398.1],
+    customers:  [1112.9,1141.8,1172.7,1208.1,1248.7,1294.4,1342.7,1390.3,1435.8,1451.7,1476.7,1494.3,1513.2,1535.3,1551.9],
+    gasDelivered:[100.07,90.73,94.22,90.41,91.21,88.84,86.28,88.55,90.82,87.39,89.56,90.67,91.13,83.45] },
+  { id:'AGNSA',name:'AGN SA', color:'#2E7D32',
+    revTarget:  [213.6,237.5,284.4,322.8,320.1,320.1,221.5,259.5,272.4,277.0,286.0,247.4,275.9,281.2],
+    revActual:  [243.0,235.3,278.1,315.8,321.6,320.2,250.8,255.0,263.7,281.3,290.3,264.7,266.1,269.5],
+    opexFcst:   [93.5,97.8,96.4,95.4,93.3,90.0,91.9,93.7,95.5,95.7,95.9,86.2,86.9,87.5],
+    opexActual: [87.5,89.4,87.2,90.1,88.9,82.4,77.3,82.7,75.8,75.0,74.9,67.5,67.1,64.1],
+    capexFcst:  [60.0,140.5,145.7,137.1,141.1,134.3,144.2,140.5,147.3,152.1,133.3,128.4,130.4,118.8],
+    capexActual:[58.5,77.3,108.6,129.1,132.8,152.1,113.5,123.3,128.8,118.6,121.8,104.4,102.8,97.5],
+    cabActual:  [1444.3,1491.3,1549.0,1624.9,1698.4,1781.9,1842.8,1908.5,1971.9,2017.9,2024.4,2026.0,2026.8,2012.9],
+    uafg:       [1935.0,1844.2,1613.4,1435.4,1245.7,825.2,702.6,691.3,672.0,603.0,705.0,392.0,312.0,223.3],
+    customers:  [403.4,410.7,417.2,423.4,430.2,435.9,441.9,448.2,454.4,461.0,466.4,471.6,476.9,483.3,489.7],
+    gasDelivered:[25.65,24.20,23.28,23.17,22.59,21.92,22.36,21.50,21.60,21.17,20.91,20.54,20.36,19.23] },
+  { id:'AGVIC',name:'AGN Vic', color:'#AD1457',
+    revTarget:  [254.7,260.2,232.0,263.0,266.1,273.5,301.4,265.1,295.0,292.7,300.7,316.9,250.4,278.6],
+    revActual:  [243.1,251.2,246.0,254.0,282.2,288.5,308.6,284.9,295.1,314.1,306.7,308.6,265.1,275.0],
+    opexFcst:   [79.2,80.6,87.2,89.8,91.6,93.0,94.4,85.6,86.5,87.5,88.6,89.8,92.2,107.4],
+    opexActual: [86.5,88.3,86.5,87.3,82.3,84.2,87.8,81.4,85.0,85.8,88.7,89.8,90.0,98.1],
+    capexFcst:  [116.1,133.7,121.9,124.2,108.8,117.8,93.0,145.2,167.1,158.5,130.2,92.7,86.5,115.2],
+    capexActual:[101.6,143.1,134.5,144.3,161.4,113.1,106.2,105.4,127.9,154.6,164.8,155.7,152.1,88.7],
+    cabActual:  [1543.1,1616.3,1670.2,1757.1,1871.7,1921.5,1979.5,1988.7,2025.7,2107.0,2086.8,2100.5,2081.6,2140.1],
+    uafg:       [1715.9,1671.8,1921.7,1643.4,2161.4,1731.3,2292.6,2119.7,2283.6,2270.0,2153.0,2169.0,1913.7,2089.0],
+    customers:  [593.7,601.8,622.6,632.7,646.5,663.0,678.2,694.8,710.2,724.6,739.6,751.2,756.7,762.8,773.3],
+    gasDelivered:[57.89,57.91,53.82,53.74,58.60,57.52,59.80,57.44,57.99,58.13,57.74,57.39,48.36,50.62] },
+  { id:'AUS',  name:'AusNet', color:'#039BE5',
+    revTarget:  [281.0,285.8,258.3,233.9,228.8,235.5,263.4,236.9,243.0,238.3,241.1,246.6,204.4,238.4],
+    revActual:  [275.8,291.6,255.6,222.7,238.8,250.7,267.1,238.5,245.8,255.9,248.6,244.8,207.2,238.5],
+    opexFcst:   [74.6,76.5,84.4,73.3,78.4,70.3,73.8,66.7,67.5,68.4,69.7,70.6,73.6,80.6],
+    opexActual: [59.6,70.6,73.1,65.7,65.8,65.4,71.5,70.0,68.5,67.6,62.4,70.8,52.6,61.9],
+    capexFcst:  [98.9,96.6,138.1,138.4,136.1,121.3,109.1,130.2,126.2,122.2,114.4,108.6,101.4,112.9],
+    capexActual:[111.6,123.1,113.5,120.2,116.4,104.3,105.3,117.9,114.6,110.9,116.9,96.3,115.9,105.5],
+    cabActual:  [1761.3,1793.8,1808.2,1857.4,1912.7,1939.0,1947.1,1988.1,2030.0,2092.7,2036.1,2002.3,1972.4,2043.2],
+    uafg:       [2477.7,2230.3,2069.3,2190.2,2531.1,2634.7,2466.1,2356.0,2272.7,1926.2,1875.1,1954.5,2901.0,1983.6],
+    customers:  [607.8,622.9,636.5,651.2,666.4,682.0,700.0,718.2,738.8,759.2,778.8,796.7,804.7,823.9,838.9],
+    gasDelivered:[71.16,72.97,68.19,64.27,67.55,66.02,66.93,63.75,66.23,70.17,70.45,65.94,56.36,60.73] },
+  { id:'MGN',  name:'Multinet', color:'#6A1B9A',
+    revTarget:  [260.3,262.1,235.0,241.5,238.8,240.8,258.3,234.3,256.7,254.1,260.8,268.8,204.7,232.2],
+    revActual:  [262.7,270.2,238.9,228.3,236.7,245.7,251.8,244.1,253.1,264.2,259.3,254.4,218.9,232.6],
+    opexFcst:   [67.9,67.7,77.4,85.0,88.1,87.6,88.7,94.4,95.6,96.9,98.3,99.8,103.8,94.8],
+    opexActual: [84.7,113.5,94.0,90.0,94.3,100.2,98.5,74.9,74.8,80.0,76.1,79.6,67.2,73.5],
+    capexFcst:  [68.3,65.2,98.2,51.6,61.4,80.9,42.5,117.5,99.3,103.5,90.5,87.9,82.1,143.7],
+    capexActual:[84.6,104.4,75.8,68.5,76.2,87.8,91.7,119.2,103.8,97.7,98.3,77.6,92.6,113.4],
+    cabActual:  [1405.8,1455.3,1468.3,1463.2,1476.7,1490.6,1483.2,1544.7,1578.1,1623.2,1572.2,1533.9,1509.4,1593.1],
+    uafg:       [2107.4,2558.4,2652.0,2531.1,3378.3,2921.9,3321.5,2884.1,2635.1,2900.6,2590.0,2724.0,2740.5,2748.0],
+    customers:  [673.8,678.2,682.7,687.4,691.1,694.5,699.4,705.0,711.5,717.6,719.4,719.8,721.2,723.3,723.4],
+    gasDelivered:[56.57,58.10,55.05,52.98,58.23,56.57,56.40,55.61,56.29,57.13,56.12,54.59,45.50,47.42] }
+];
+
+// ============================================================
+// PERFORMANCE CHART HELPER
+// ============================================================
+function makePerfLine(canvasId, years, datasets, yLabel, yFmt) {
+  const ctx = document.getElementById(canvasId);
+  if (!ctx) return;
+  return new Chart(ctx.getContext('2d'), {
+    type: 'line',
+    data: { labels: years, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 }, padding: 10,
+          filter: (item) => !item.text.includes('(target)') && !item.text.includes('(forecast)') ? true : item.datasetIndex < 12
+        }},
+        tooltip: {
+          itemSort: (a, b) => (b.raw ?? -Infinity) - (a.raw ?? -Infinity),
+          callbacks: { label: ctx => {
+            const v = ctx.raw;
+            if (v === null || v === undefined) return null;
+            return ` ${ctx.dataset.label}: ${yFmt(v)}`;
+          }}
+        }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 45 } },
+        y: { beginAtZero: false,
+             title: { display: true, text: yLabel, font: { size: 11 } },
+             ticks: { callback: yFmt, font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+// Build actual + forecast/target dataset pairs for each network
+function perfPairs(key_actual, key_fcst, labelSuffix_actual, labelSuffix_fcst) {
+  const ds = [];
+  PD.forEach(n => {
+    ds.push({
+      label: n.name,
+      data: n[key_actual], borderColor: n.color, backgroundColor: 'transparent',
+      borderWidth: 2, pointRadius: 2, pointHoverRadius: 5, tension: 0.3
+    });
+  });
+  PD.forEach(n => {
+    ds.push({
+      label: n.name + labelSuffix_fcst,
+      data: n[key_fcst], borderColor: n.color, backgroundColor: 'transparent',
+      borderWidth: 1.5, borderDash: [5,3], pointRadius: 1, pointHoverRadius: 4, tension: 0.3
+    });
+  });
+  return ds;
+}
+
+function perfActual(key, years_key) {
+  return PD.map(n => ({
+    label: n.name, data: n[key].slice(0, (years_key||PERF_YEARS).length),
+    borderColor: n.color, backgroundColor: 'transparent',
+    borderWidth: 2, pointRadius: 2, pointHoverRadius: 5, tension: 0.3
+  }));
+}
+
+const fmtTJ = v => `${v.toLocaleString()}TJ`;
+const fmtK  = v => `${v.toFixed(0)}k`;
+const fmtDollar = v => `$${v.toFixed(0)}`;
+
+// ---- Revenue charts ----
+makePerfLine('perfRevActChart',  PERF_YEARS, perfActual('revActual'),  'Real A$M (June 2025)', fmtM);
+makePerfLine('perfRevTgtChart',  PERF_YEARS, perfActual('revTarget'),  'Real A$M (June 2025)', fmtM);
+
+// ---- Opex charts ----
+makePerfLine('perfOpexActChart', PERF_YEARS, perfActual('opexActual'), 'Real A$M (June 2025)', fmtM);
+makePerfLine('perfOpexFcstChart',PERF_YEARS, perfActual('opexFcst'),   'Real A$M (June 2025)', fmtM);
+
+// ---- Capex charts ----
+makePerfLine('perfCapexActChart',PERF_YEARS, perfActual('capexActual'),'Real A$M (June 2025)', fmtM);
+makePerfLine('perfCapexFcstChart',PERF_YEARS,perfActual('capexFcst'),  'Real A$M (June 2025)', fmtM);
+
+// ---- CAB chart ----
+makePerfLine('perfCabChart', PERF_YEARS,
+  perfActual('cabActual'),
+  'Real A$M (June 2025)', fmtM);
+
+// ---- UAFG chart ----
+makePerfLine('perfUafgChart', PERF_YEARS,
+  perfActual('uafg'),
+  'TJs', fmtTJ);
+
+// ---- Customers chart ----
+makePerfLine('perfCustChart', PERF_YEARS_CUST,
+  PD.map(n => ({
+    label: n.name, data: n.customers,
+    borderColor: n.color, backgroundColor: 'transparent',
+    borderWidth: 2, pointRadius: 2, pointHoverRadius: 5, tension: 0.3
+  })),
+  "000's", v => `${v.toFixed(0)}k`);
+
+// ---- Gas delivered chart ----
+makePerfLine('perfGasChart', PERF_YEARS,
+  PD.map(n => ({
+    label: n.name, data: n.gasDelivered,
+    borderColor: n.color, backgroundColor: 'transparent',
+    borderWidth: 2, pointRadius: 2, pointHoverRadius: 5, tension: 0.3
+  })),
+  "TJs (000s)", v => `${v.toFixed(1)}`);
+
+// ---- Revenue per customer ----
+// revActual is $m, customers (first 14) in 000s → $/customer = revActual*1000/customers
+makePerfLine('perfRevCustChart', PERF_YEARS,
+  PD.map(n => ({
+    label: n.name,
+    data: n.revActual.map((r,i) => n.customers[i] ? Math.round(r*1000/n.customers[i]) : null),
+    borderColor: n.color, backgroundColor: 'transparent',
+    borderWidth: 2, pointRadius: 2, pointHoverRadius: 5, tension: 0.3
+  })),
+  '$/customer/year', v => `$${v.toFixed(0)}`);
+
+// ---- Opex per customer ----
+makePerfLine('perfOpexCustChart', PERF_YEARS,
+  PD.map(n => ({
+    label: n.name,
+    data: n.opexActual.map((o,i) => n.customers[i] ? Math.round(o*1000/n.customers[i]) : null),
+    borderColor: n.color, backgroundColor: 'transparent',
+    borderWidth: 2, pointRadius: 2, pointHoverRadius: 5, tension: 0.3
+  })),
+  '$/customer/year', v => `$${v.toFixed(0)}`);
+
+</script>
+</body>
+</html>
