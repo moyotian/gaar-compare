@@ -1107,14 +1107,50 @@ const PD = [
 // ============================================================
 // PERFORMANCE CHART HELPER
 // ============================================================
-function makePerfLine(canvasId, years, datasets, yLabel, yFmt) {
+
+// Plugin: draws the latest value to the right of each line, with simple collision avoidance
+function makeEndLabelPlugin(fmt) {
+  return {
+    id: 'endLabel',
+    afterDraw(chart) {
+      const { ctx, chartArea, scales: { y: yScale } } = chart;
+      if (!chartArea) return;
+      const xPos = chartArea.right + 7;
+      const lineHeight = 14;
+      const labels = [];
+      chart.data.datasets.forEach((dataset, i) => {
+        if (chart.getDatasetMeta(i).hidden) return;
+        let lastVal = null;
+        for (let j = dataset.data.length - 1; j >= 0; j--) {
+          if (dataset.data[j] != null) { lastVal = dataset.data[j]; break; }
+        }
+        if (lastVal === null) return;
+        labels.push({ y: yScale.getPixelForValue(lastVal), text: fmt(lastVal), color: dataset.borderColor });
+      });
+      // Sort top→bottom then nudge overlapping labels downward
+      labels.sort((a, b) => a.y - b.y);
+      for (let i = 1; i < labels.length; i++) {
+        if (labels[i].y - labels[i-1].y < lineHeight) labels[i].y = labels[i-1].y + lineHeight;
+      }
+      ctx.save();
+      ctx.font = 'bold 10px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      labels.forEach(l => { ctx.fillStyle = l.color; ctx.fillText(l.text, xPos, l.y); });
+      ctx.restore();
+    }
+  };
+}
+
+function makePerfLine(canvasId, years, datasets, yLabel, yFmt, endLabels = false) {
   const ctx = document.getElementById(canvasId);
   if (!ctx) return;
-  return new Chart(ctx.getContext('2d'), {
+  const config = {
     type: 'line',
     data: { labels: years, datasets },
     options: {
       responsive: true, maintainAspectRatio: false,
+      layout: endLabels ? { padding: { right: 62 } } : {},
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 }, padding: 10,
@@ -1136,7 +1172,9 @@ function makePerfLine(canvasId, years, datasets, yLabel, yFmt) {
              ticks: { callback: yFmt, font: { size: 11 } } }
       }
     }
-  });
+  };
+  if (endLabels) config.plugins = [makeEndLabelPlugin(yFmt)];
+  return new Chart(ctx.getContext('2d'), config);
 }
 
 // Build actual + forecast/target dataset pairs for each network
@@ -1172,26 +1210,26 @@ const fmtK  = v => `${v.toFixed(0)}k`;
 const fmtDollar = v => `$${v.toFixed(0)}`;
 
 // ---- Revenue charts ----
-makePerfLine('perfRevActChart',  PERF_YEARS, perfActual('revActual'),  'Real A$M (June 2025)', fmtM);
-makePerfLine('perfRevTgtChart',  PERF_YEARS, perfActual('revTarget'),  'Real A$M (June 2025)', fmtM);
+makePerfLine('perfRevActChart',  PERF_YEARS, perfActual('revActual'),  'Real A$M (June 2025)', fmtM, true);
+makePerfLine('perfRevTgtChart',  PERF_YEARS, perfActual('revTarget'),  'Real A$M (June 2025)', fmtM, true);
 
 // ---- Opex charts ----
-makePerfLine('perfOpexActChart', PERF_YEARS, perfActual('opexActual'), 'Real A$M (June 2025)', fmtM);
-makePerfLine('perfOpexFcstChart',PERF_YEARS, perfActual('opexFcst'),   'Real A$M (June 2025)', fmtM);
+makePerfLine('perfOpexActChart', PERF_YEARS, perfActual('opexActual'), 'Real A$M (June 2025)', fmtM, true);
+makePerfLine('perfOpexFcstChart',PERF_YEARS, perfActual('opexFcst'),   'Real A$M (June 2025)', fmtM, true);
 
 // ---- Capex charts ----
-makePerfLine('perfCapexActChart',PERF_YEARS, perfActual('capexActual'),'Real A$M (June 2025)', fmtM);
-makePerfLine('perfCapexFcstChart',PERF_YEARS,perfActual('capexFcst'),  'Real A$M (June 2025)', fmtM);
+makePerfLine('perfCapexActChart',PERF_YEARS, perfActual('capexActual'),'Real A$M (June 2025)', fmtM, true);
+makePerfLine('perfCapexFcstChart',PERF_YEARS,perfActual('capexFcst'),  'Real A$M (June 2025)', fmtM, true);
 
 // ---- CAB chart ----
 makePerfLine('perfCabChart', PERF_YEARS,
   perfActual('cabActual'),
-  'Real A$M (June 2025)', fmtM);
+  'Real A$M (June 2025)', fmtM, true);
 
 // ---- UAFG chart ----
 makePerfLine('perfUafgChart', PERF_YEARS,
   perfActual('uafg'),
-  'TJs', fmtTJ);
+  'TJs', fmtTJ, true);
 
 // ---- Customers chart ----
 makePerfLine('perfCustChart', PERF_YEARS_CUST,
@@ -1200,7 +1238,7 @@ makePerfLine('perfCustChart', PERF_YEARS_CUST,
     borderColor: n.color, backgroundColor: 'transparent',
     borderWidth: 2, pointRadius: 2, pointHoverRadius: 5, tension: 0.3
   })),
-  "000's", v => `${v.toFixed(0)}k`);
+  "000's", v => `${v.toFixed(0)}k`, true);
 
 // ---- Gas delivered chart ----
 makePerfLine('perfGasChart', PERF_YEARS,
@@ -1209,7 +1247,7 @@ makePerfLine('perfGasChart', PERF_YEARS,
     borderColor: n.color, backgroundColor: 'transparent',
     borderWidth: 2, pointRadius: 2, pointHoverRadius: 5, tension: 0.3
   })),
-  "TJs (000s)", v => `${v.toFixed(1)}`);
+  "TJs (000s)", v => `${v.toFixed(1)}`, true);
 
 // ---- Revenue per customer ----
 // revActual is $m, customers (first 14) in 000s → $/customer = revActual*1000/customers
@@ -1220,7 +1258,7 @@ makePerfLine('perfRevCustChart', PERF_YEARS,
     borderColor: n.color, backgroundColor: 'transparent',
     borderWidth: 2, pointRadius: 2, pointHoverRadius: 5, tension: 0.3
   })),
-  '$/customer/year', v => `$${v.toFixed(0)}`);
+  '$/customer/year', v => `$${v.toFixed(0)}`, true);
 
 // ---- Opex per customer ----
 makePerfLine('perfOpexCustChart', PERF_YEARS,
@@ -1230,7 +1268,7 @@ makePerfLine('perfOpexCustChart', PERF_YEARS,
     borderColor: n.color, backgroundColor: 'transparent',
     borderWidth: 2, pointRadius: 2, pointHoverRadius: 5, tension: 0.3
   })),
-  '$/customer/year', v => `$${v.toFixed(0)}`);
+  '$/customer/year', v => `$${v.toFixed(0)}`, true);
 
 </script>
 </body>
